@@ -2,87 +2,131 @@ import db from "../models/index.js";
 import { securepassword } from "../utils/securePassword.js";
 import { generateEmployeeCode } from "../utils/config.js";
 import { validation } from "../utils/validation.js";
+import { removeImg } from "../utils/removeImage.js";
 import fs from 'fs';
 import path from "path";
-import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 const User = db.User
 
-
-
 export const register = async (req, res) => {
-    let newPath;
+    let newPath
+    let originalname
+    let file
     try {
-        // Process password and employee code
-        const password_hash = await securepassword(req.body.password);
-        const employee_code = await generateEmployeeCode();
-        req.body.employee_code = employee_code;
-
-        // Handle file upload
-        let avatar = null;
-        if (req.file) {
-            const ext = path.extname(req.file.originalname);
-            avatar = `${employee_code}${ext}`;
-            newPath = path.join('public/images', avatar);
-            fs.renameSync(req.file.path, newPath);
+        const { firstname, lastname, password, email, phone, identification_number, address, insurance_number, role_id } = req.body
+        const employee_code = await generateEmployeeCode()
+        const validateObj = { firstname, lastname, password, email }
+        let avatar = null
+        file = req.file
+        if (file) {
+            originalname = file.filename
+            const ext = path.extname(originalname)
+            avatar = `${employee_code}${ext}`
+            newPath = path.join('public/images', avatar)
+            fs.renameSync(file.path, newPath)
         }
-
+        const action = 'register'
+        const validateErr = validation(action, validateObj);
+    
+        if (validateErr) {
+            if (file) {
+                removeImg(newPath)
+            }
+            return res.status(400).send({ message: validateErr })
+        }
+        const password_hash = await securepassword(password)
         // Create new user
         const newUser = await User.create({
             employee_code: employee_code,
-            firstname: req.body.firstname,
-            lastname: req.body.lastname,
+            firstname: firstname,
+            lastname: lastname,
             password_hash: password_hash,
-            email: req.body.email,
-            phone: req.body.phone,
+            email: email,
+            phone: phone,
             avatar: avatar,
-            identification_number: req.body.identification_number,
-            address: req.body.address,
-            insurance_number: req.body.insurance_number,
-            role_id: req.body.role_id
+            identification_number: identification_number,
+            address: address,
+            insurance_number: insurance_number,
+            role_id: role_id
         });
 
-        return res.status(201).send({ user: newUser });
+        return res.status(201).send({ user: newUser })
     } catch (err) {
-        if (newPath) {
-            fs.unlink(newPath, (err) => {
-                if (err) console.error('Error deleting file:', err);
-            });
-        }
-        return res.status(500).send({ message: err.message });
+        if (file) {
+            removeImg(newPath)
+        } 
+        return res.status(500).send({ message: err.message })
     }
 };
 
 export const editProfile = async (req, res) => {
-    let newPath;
+    let newPath
+    let imgPath
+    let file
     try {
-        const token = req.header["authorization"]
-        if (!token) {
-            return res.status(403).send({ message: 'Access token is required' })
+        const userId = req.user.id
+        const empId = req.params.id
+        const id = empId ? empId : userId
+        console.log(id);
+        const employee_code = req.user.employee_code
+        const { firstname, lastname, email, phone, identification_number, address, insurance_number, role_id, old_avatar } = req.body
+        let ext
+        let newAvatar
+        if (req.file) {
+            file = req.file
+            imgPath = file.path
+            ext = path.extname(file.filename)
+            newAvatar = `${employee_code}${ext}`
+            console.log(newAvatar);
         }
-        const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err) => {
-            if (err.name === 'TokenExpiredError') {
-                return res.status(401).send({ message: 'Access token is expried' })
-            }
-        })
-
-        const userId = decoded.id
-
-        const { firstname, lastname, email, phone, identification_number, address, insurance_number, role_id } = req.body
         const action = 'editProfile'
         const validateObj = { firstname, lastname, email }
         const validateErr = validation(action, validateObj)
         if (validateErr) {
-            return res.status(400).send({ message: validateErr})
+            if (file) {
+                removeImg(imgPath)
+            }
+            return res.status(400).send({ message: validateErr })
         }
-        const avatar = null
-        if (req.file) {
-            
+       
+        const userUpdateData = {
+            firstname,
+            lastname,
+            email,
+            phone,
+            identification_number,
+            address,
+            insurance_number,
+        };
+
+        if (role_id) {
+            userUpdateData.role_id = role_id
         }
+
+        if (file) {
+            userUpdateData.avatar = newAvatar
+        }
+
+        await User.update(userUpdateData, {
+            where: {
+                id: id
+            }
+        });
+        if (file) {
+            newPath = path.join('public/images', newAvatar)
+            console.log(newPath)
+            const oldPath = path.join('public/images', old_avatar)
+            removeImg(oldPath)
+            fs.renameSync(imgPath, newPath)
+        }
+        return res.status(200).send({ message: 'Profile updated successfully' })
     } catch (err) {
+        if (file) {
+            removeImg(imgPath)
+        }
         return res.status(500).send({ message: err.message })
     }
 }
@@ -110,5 +154,19 @@ export const getAllUsers = async (req, res) => {
     } catch (err) { 
         return res.status(500).send({ message: err.message })
     }
-    
+}
+
+export const getUserById = async (req, res) => {
+    try {
+        const userId = req.user.id
+        const empId = req.params.id
+        const id = empId ? empId : userId
+        const user = await User.findByPk(id)
+        if (!user) {
+            return res.status(404).send({ message: 'User not found' })
+        }
+        return res.status(200).json(user)
+    } catch (err) { 
+        return res.status(500).send({ message: err.message })
+    }
 }

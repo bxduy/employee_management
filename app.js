@@ -8,6 +8,7 @@ db.sequelize.sync();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); 
 
+app.use('public', express.static('public'))
 app.use('/api/v1', router);
 
 const PORT = process.env.PORT || 3000;

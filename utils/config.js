@@ -19,7 +19,7 @@ export const generateEmployeeCode = async () => {
 }
 
 export const generateToken = (user) => {
-    const accessToken = jwt.sign({ id: user.id }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: process.env.ACCESS_TOKEN_EXP });
-    const refreshToken = jwt.sign({ id: user.id }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: process.env.REFRESH_TOKEN_EXP });
+    const accessToken = jwt.sign({ id: user.id, employee_code: user.employee_code }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: process.env.ACCESS_TOKEN_EXP });
+    const refreshToken = jwt.sign({ id: user.id, employee_code: user.employee_code }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: process.env.REFRESH_TOKEN_EXP });
     return { accessToken, refreshToken }
 }
