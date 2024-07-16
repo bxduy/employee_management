@@ -49,17 +49,6 @@ const User = sequelize.define('User', {
         type: DataTypes.STRING,
         allowNull: true
     },
-    create_at: {
-        type: DataTypes.DATE,
-        defaultValue: DataTypes.NOW,
-        allowNull: true,
-        field: 'create_at'
-    },
-    update_at: {
-        type: DataTypes.DATE,
-        defaultValue: DataTypes.NOW,
-        allowNull: true
-    },
     role_id: {
         type: DataTypes.INTEGER,
         allowNull: false
@@ -69,15 +58,9 @@ const User = sequelize.define('User', {
         allowNull: true
     }
 }, {
-    timestamps: false,
+    timestamps: true,
     tableName: 'users'
 });
 
-User.addHook('beforeUpdate', async (user, options) => {
-    // Check if an update operation is being performed
-    if (options.fields && !options.fields.includes('create_at')) {
-        delete user.dataValues.create_at; // Remove `create_at` from update data
-    }
-});
 
 export default User;

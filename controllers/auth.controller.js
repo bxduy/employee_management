@@ -57,7 +57,7 @@ export const login = async (req, res) => {
             avatar: existingUser.avatar,
             role_id: existingUser.role_id,
         }
-        return res.status(200).send({ accessToken: accessToken, refreshToken: refreshToken, user: user})
+        return res.status(200).send({ accessToken, refreshToken, user})
     } catch (err) {
         return res.status(500).send({ message: err.message })
     }

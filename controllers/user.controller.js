@@ -12,6 +12,7 @@ dotenv.config();
 const User = db.User
 
 export const register = async (req, res) => {
+    const transaction = await db.sequelize.transaction()
     let newPath
     let originalname
     let file
@@ -51,21 +52,25 @@ export const register = async (req, res) => {
             address: address,
             insurance_number: insurance_number,
             role_id: role_id
-        });
+        }, { transaction })
+
+        await transaction.commit()
 
         return res.status(201).send({ user: newUser })
     } catch (err) {
         if (file) {
             removeImg(newPath)
         } 
+        await transaction.rollback()
         return res.status(500).send({ message: err.message })
     }
-};
+}
 
 export const editProfile = async (req, res) => {
     let newPath
     let imgPath
     let file
+    let transaction
     try {
         const userId = req.user.id
         const empId = req.params.id
@@ -75,8 +80,8 @@ export const editProfile = async (req, res) => {
         const { firstname, lastname, email, phone, identification_number, address, insurance_number, role_id, old_avatar } = req.body
         let ext
         let newAvatar
-        if (req.file) {
-            file = req.file
+        file = req.file
+        if (file) {
             imgPath = file.path
             ext = path.extname(file.filename)
             newAvatar = `${employee_code}${ext}`
@@ -91,7 +96,7 @@ export const editProfile = async (req, res) => {
             }
             return res.status(400).send({ message: validateErr })
         }
-       
+        transaction = await db.sequelize.transaction()
         const userUpdateData = {
             firstname,
             lastname,
@@ -112,8 +117,8 @@ export const editProfile = async (req, res) => {
 
         await User.update(userUpdateData, {
             where: {
-                id: id
-            }
+                id,
+            }, transaction
         });
         if (file) {
             newPath = path.join('public/images', newAvatar)
@@ -122,8 +127,12 @@ export const editProfile = async (req, res) => {
             removeImg(oldPath)
             fs.renameSync(imgPath, newPath)
         }
+        await transaction.commit()
         return res.status(200).send({ message: 'Profile updated successfully' })
     } catch (err) {
+        if (transaction) {
+            await transaction.rollback()
+        }
         if (file) {
             removeImg(imgPath)
         }

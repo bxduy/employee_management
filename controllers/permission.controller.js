@@ -9,8 +9,7 @@ const Permission = db.Permission;
 
 export const getPermission = async (req, res) => {
     try {
-        const token = req.headers["authorization"];
-        const id = jwt.verify(token, process.env.SECRET_KEY).id;
+        const id = rep.user.id
         const userWithPermission = await User.findOne({
             where: {
                 id: id

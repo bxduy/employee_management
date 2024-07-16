@@ -16,8 +16,11 @@ Permission.belongsToMany(Role, { through: RolePermission, foreignKey: 'permissio
 Notification.belongsTo(User, { foreignKey: 'maker_id' });
 User.hasMany(Notification, { foreignKey: 'maker_id' });
 
-FormData.belongsTo(User, { foreignKey: 'user_id' });
-User.hasMany(FormData, { foreignKey: 'user_id' });
+FormData.belongsTo(User, { as: 'Sender', foreignKey: 'sender_id' });
+User.hasMany(FormData, { as: 'SentForms', foreignKey: 'sender_id' });
+
+FormData.belongsTo(User, { as: 'Approver', foreignKey: 'approver_id' });
+User.hasMany(FormData, { as: 'ApprovedForms', foreignKey: 'approver_id' });
 
 const db = {
     sequelize,

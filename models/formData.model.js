@@ -20,10 +20,15 @@ const FormData = sequelize.define('FormData', {
         type: DataTypes.ENUM('new', 'submitted', 'approved', 'rejected'),
         defaultValue: 'new'
     },
-    user_id: {
+    sender_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false
+    },
+    approver_id: {
         type: DataTypes.INTEGER,
         allowNull: false
     }
+    
 }, {
     timestamps: false,
     tableName: 'form_data'
