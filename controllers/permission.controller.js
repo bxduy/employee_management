@@ -1,6 +1,6 @@
 import db from '../models/index.js';
-import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import redisClient from '../config/redis.js';
 
 dotenv.config(); 
 const User = db.User;
@@ -9,7 +9,7 @@ const Permission = db.Permission;
 
 export const getPermission = async (req, res) => {
     try {
-        const id = rep.user.id
+        const id = req.user.id
         const userWithPermission = await User.findOne({
             where: {
                 id: id
@@ -28,8 +28,10 @@ export const getPermission = async (req, res) => {
         userWithPermission.Role.Permissions.forEach(permission => {
             permissionList.push(permission.name);
         });
+        const key = `${id}-permission`
+        await redisClient.set(key, JSON.stringify(permissionList))
         return res.status(200).send({ permissionList: permissionList });
     } catch (err) {
-        res.status(500).send({ message: err.message });
+        return res.status(500).send({ message: err.message });
     }
 }

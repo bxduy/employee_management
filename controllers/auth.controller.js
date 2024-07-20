@@ -5,8 +5,8 @@ dotenv.config();
 import { generateToken } from "../utils/config.js"
 import { validation } from "../utils/validation.js"
 import bcrypt from 'bcryptjs'
-import { where } from 'sequelize';
 import { securepassword } from '../utils/securePassword.js'
+import redisClient from '../config/redis.js'
 
 const User = db.User
 
@@ -35,7 +35,7 @@ export const login = async (req, res) => {
             return res.status(403).send({ message: "Invalid password!" })
         }
         // generate token
-        const { accessToken, refreshToken } = generateToken(existingUser)
+        const { accessToken, refreshToken } = await generateToken(existingUser)
         await User.update({
             refresh_token: refreshToken,
         }, {
@@ -72,7 +72,8 @@ export const refreshToken = async (req, res) => {
         const user = await User.findOne({
             where: {
                 refresh_token: refreshToken
-            }
+            },
+            attributes: ['employee_code']
         });
         if (!user) {
             return res.status(401).send({ message: 'Refresh token is not found' });
@@ -91,6 +92,10 @@ export const refreshToken = async (req, res) => {
                 return res.status(401).send({ message: 'Unauthorized' })
             }
             const newAccessToken = jwt.sign({ id: user.id }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: process.env.ACCESS_TOKEN_EXP })
+            const key = `${user.id}-accessToken`
+            await redisClient.set(key, newAccessToken)
+            const expires = process.env.ACCESS_TOKEN_EXP
+            await redisClient.pExpire(key, expires)
             res.status(201).send({ newAccessToken: newAccessToken });
         })
     } catch (err) {
@@ -147,6 +152,8 @@ export const logout = async (req, res) => {
                 id: userId
             }
         })
+        const key = `${userId}-accessToken`
+        await redisClient.del(key)
         return res.status(200).send({ message: 'Logout successfully' })
     } catch (err) { 
         return res.status(500).send({ message: err.message })

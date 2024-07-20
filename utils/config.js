@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid'
 import db from '../models/index.js'
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import redisClient from '../config/redis.js';
 dotenv.config()
 const User = db.User
 
@@ -18,8 +19,12 @@ export const generateEmployeeCode = async () => {
     return employee_code
 }
 
-export const generateToken = (user) => {
+export const generateToken = async(user) => {
     const accessToken = jwt.sign({ id: user.id, employee_code: user.employee_code }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: process.env.ACCESS_TOKEN_EXP });
     const refreshToken = jwt.sign({ id: user.id, employee_code: user.employee_code }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: process.env.REFRESH_TOKEN_EXP });
+    const key = `${user.id}-accessToken`
+    await redisClient.set(key, accessToken)
+    const expires = process.env.ACCESS_TOKEN_EXP
+    await redisClient.expire(key, 10)
     return { accessToken, refreshToken }
 }
