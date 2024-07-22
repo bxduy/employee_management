@@ -3,12 +3,8 @@ import cloudinary from "../config/cloudinary.js";
 import { securepassword } from "../utils/securePassword.js";
 import { generateEmployeeCode } from "../utils/config.js";
 import { validation } from "../utils/validation.js";
-import { removeImg } from "../utils/removeImage.js";
 import { Op } from "sequelize";
-import fs from 'fs';
-import path from "path";
 import dotenv from 'dotenv';
-import { log } from "console";
 
 dotenv.config();
 

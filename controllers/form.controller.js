@@ -1,5 +1,5 @@
 import db from '../models/index.js'
-import { sendEmail } from '../utils/email.js'
+import emailQueue from '../utils/email.js'
 
 const { FormTemplate, Role, User, FormData, Notification } = db
 
@@ -25,12 +25,13 @@ export const makeForm = async (req, res) => {
             await transaction.rollback()
             return res.status(404).send({ message: 'Template not found' })
         }
-        const criteria = JSON.parse(template.criteria)
+        // console.log(template.criteria);
+        const criteria = template.criteria
         // Convert data structure
         const newSections = criteria.sections.map(section => {
             const newFields = section.fields.map(field => {
-                return { [field.label]: "" };
-            });
+                return { [field.label]: "" }
+            })
             return {
                 title: section.title,
                 fields: newFields
@@ -58,7 +59,7 @@ export const makeForm = async (req, res) => {
         });
 
         const userIds = users.map(user => user.id)
-        const emails = users.map(user => user.email)
+        const emailAddresses = users.map(user => user.email).join(',')
         const type = template.name
         const formDataEntries = userIds.map(userId => ({
             type,
@@ -70,10 +71,11 @@ export const makeForm = async (req, res) => {
         const formName = type.toUpperCase() + ' FORM'
         const subject = `${formName} has been created`
         const text = `${formName} has been created, please fill out the form`
-        const emailPromises = emails.map(email => sendEmail(email, subject, text))
-        await Promise.all(emailPromises)
-          .catch(error => console.error('Error sending some emails:', error))
-        
+        emailQueue.add({
+            bcc: emailAddresses,
+            subject,
+            text,
+        })
         await Notification.create({
             message: subject,
             maker_id: creator_id

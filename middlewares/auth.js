@@ -13,6 +13,7 @@ export const authorize = (requiredPermissions = []) => async (req, res, next) =>
         if (!token) {
             return res.status(401).json({ message: 'Access token is missing' })
         }
+        console.log(token);
         let decoded
         let existingToken
         let userId
@@ -21,6 +22,9 @@ export const authorize = (requiredPermissions = []) => async (req, res, next) =>
             userId = decoded.id
             const tokenKey = `${userId}-accessToken`
             existingToken = await redisClient.get(tokenKey)
+            if (!existingToken) {
+                return res.status(403).json({ message: 'Token not found in Redis' })
+            }
             if (existingToken && existingToken !== token) {
                 return res.status(403).json({ message: 'Token mismatch or expired' })
             }
@@ -29,14 +33,18 @@ export const authorize = (requiredPermissions = []) => async (req, res, next) =>
         }
         req.user = decoded
         if (requiredPermissions.length === 0) {
-            next()
+            return next()
         }
+        let permissions
         const permissionKey = `${userId}-permission`
-        const permissions = await redisClient.get(permissionKey, (err) => {
-            if (err) {
-                return res.status(500).send({ message: 'Redis error' }) 
+        try {
+            permissions = await redisClient.get(permissionKey)
+            if (!permissions) {
+                return res.status(403).send({ message: 'No permissions found in Redis' })
             }
-        })
+        } catch (err) {
+            return res.status(500).send({ message: 'Redis error' })
+        }
         if (!permissions) {
             return res.status(403).send({ message: 'No permissions found' })
         }
@@ -44,42 +52,43 @@ export const authorize = (requiredPermissions = []) => async (req, res, next) =>
         const hasRequiredPermissions = requiredPermissions.every(permission =>
             userPermissions.includes(permission)
         )
+        console.log(hasRequiredPermissions);
         if (!hasRequiredPermissions) {
             return res.status(403).send({ message: 'Insufficient permissions' })
         }
-        next()
+        return next()
     } catch (err) {
         return res.status(500).send({ message: err.message })
     }
 }
 
-export const checkPermission = (requiredPermission) => { 
-    return async (req, res, next) => {
-        const userId = req.user.id
-        try {
-            const userWithPermission = await User.findOne({
-                where: {
-                    id: userId,
-                },
-                include: [{
-                    model: Role,
-                    include: [{
-                        model: Permission,
-                    }]
-                }]
-            })
+// export const checkPermission = (requiredPermission) => { 
+//     return async (req, res, next) => {
+//         const userId = req.user.id
+//         try {
+//             const userWithPermission = await User.findOne({
+//                 where: {
+//                     id: userId,
+//                 },
+//                 include: [{
+//                     model: Role,
+//                     include: [{
+//                         model: Permission,
+//                     }]
+//                 }]
+//             })
 
-            if (!userWithPermission || !userWithPermission.Role) {
-                return res.status(404).send({ message: 'User or Role not found' })
-            }
-            const permissions = userWithPermission.Role.Permissions.map(permission => permission.name)
-            const checkPermission = permissions.includes(requiredPermission)
-            if (!checkPermission) {
-                return res.status(403).send({ message: 'You have not permission to perform this action' })
-            }
-            next()
-        } catch (err) {
-            return res.status(500).send({ message: err.message })
-        }
-    }
-}
+//             if (!userWithPermission || !userWithPermission.Role) {
+//                 return res.status(404).send({ message: 'User or Role not found' })
+//             }
+//             const permissions = userWithPermission.Role.Permissions.map(permission => permission.name)
+//             const checkPermission = permissions.includes(requiredPermission)
+//             if (!checkPermission) {
+//                 return res.status(403).send({ message: 'You have not permission to perform this action' })
+//             }
+//             next()
+//         } catch (err) {
+//             return res.status(500).send({ message: err.message })
+//         }
+//     }
+// }

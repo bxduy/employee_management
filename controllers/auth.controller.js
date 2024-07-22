@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken'
 import db from '../models/index.js'
 import dotenv from 'dotenv'
 dotenv.config();
-import { generateToken } from "../utils/config.js"
+import { generateAccessToken, generateRefreshToken } from "../utils/config.js"
 import { validation } from "../utils/validation.js"
 import bcrypt from 'bcryptjs'
 import { securepassword } from '../utils/securePassword.js'
@@ -35,7 +35,7 @@ export const login = async (req, res) => {
             return res.status(403).send({ message: "Invalid password!" })
         }
         // generate token
-        const { accessToken, refreshToken } = await generateToken(existingUser)
+        const [ accessToken, refreshToken ] = await Promise.all([generateAccessToken(existingUser), generateRefreshToken(existingUser)])
         await User.update({
             refresh_token: refreshToken,
         }, {
