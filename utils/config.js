@@ -20,15 +20,15 @@ export const generateEmployeeCode = async () => {
 }
 
 export const generateAccessToken = async(user) => {
-    const accessToken = jwt.sign({ id: user.id, employee_code: user.employee_code }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: process.env.ACCESS_TOKEN_EXP })
+    const accessToken = jwt.sign({ id: user.id, employee_code: user.employee_code }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: parseInt(process.env.ACCESS_TOKEN_EXP) })
     const key = `${user.id}-accessToken`
     await redisClient.set(key, accessToken)
-    const expires = process.env.REDIS_TOKEN_EXP
+    const expires = process.env.ACCESS_TOKEN_EXP
     await redisClient.expire(key, expires)
     return accessToken
 }
 
-export const generateRefreshToken = async (user) => {
+export const generateRefreshToken = (user) => {
     const refreshToken = jwt.sign({ id: user.id, employee_code: user.employee_code }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: process.env.REFRESH_TOKEN_EXP })
     return refreshToken
 }

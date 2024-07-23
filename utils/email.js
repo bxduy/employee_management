@@ -12,19 +12,6 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-// send email
-// export const sendEmail = async (toEmail, subject, text) => {
-//     // config mail options
-//     const mailOptions = {
-//         from: process.env.EMAIL,
-//         to: toEmail,
-//         subject: subject,
-//         text: text
-//     };
-
-//     return transporter.sendMail(mailOptions);
-// };
-
 const emailQueue = new Queue('email')
 emailQueue.process(async (job, done) => {
     const { bcc, subject, text } = job.data

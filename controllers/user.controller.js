@@ -16,13 +16,12 @@ export const register = async (req, res) => {
     try {
         const { firstname, lastname, password, email, phone, identification_number, address, insurance_number, role_id } = req.body
         const employee_code = await generateEmployeeCode()
-        const validateObj = { firstname, lastname, password, email }
         file = req.file
         const action = 'register'
-        const validateErr = validation(action, validateObj);
+        const validateErr = validation(action, { firstname, lastname, password, email });
     
         if (validateErr) {
-            return res.status(400).send({ message: validateErr })
+            return res.status(400).json({ message: validateErr })
         }
         const password_hash = await securepassword(password)
         // Create new user
@@ -48,10 +47,10 @@ export const register = async (req, res) => {
         }
         await transaction.commit()
 
-        return res.status(201).send({ message: 'User created successfully', user: newUser })
+        return res.status(201).json({ message: 'User created successfully', user: newUser })
     } catch (err) {
         await transaction.rollback()
-        return res.status(500).send({ message: err.message })
+        return res.status(500).json({ message: err.message })
     }
 }
 
@@ -65,16 +64,12 @@ export const editProfile = async (req, res) => {
         const user_code = req.user.employee_code
         const { employee_code, firstname, lastname, email, phone, identification_number, address, insurance_number } = req.body
         let code
-        console.log(employee_code);
         code = employee_code ? employee_code : user_code
-        console.log(code);
-        let newAvatar
         file = req.file
         const action = 'editProfile'
-        const validateObj = { firstname, lastname, email }
-        const validateErr = validation(action, validateObj)
+        const validateErr = validation(action, { firstname, lastname, email })
         if (validateErr) {
-            return res.status(400).send({ message: validateErr })
+            return res.status(400).json({ message: validateErr })
         }
         transaction = await db.sequelize.transaction()
         const userUpdateData = {
@@ -92,7 +87,7 @@ export const editProfile = async (req, res) => {
         }
 
         if (file) {
-            newAvatar = await cloudinary.uploader.upload(file.path, {
+            const newAvatar = await cloudinary.uploader.upload(file.path, {
                 folder: 'images',
                 public_id: `${code}`,
             })
@@ -106,12 +101,12 @@ export const editProfile = async (req, res) => {
         })
 
         await transaction.commit()
-        return res.status(200).send({ message: 'Profile updated successfully' })
+        return res.status(200).json({ message: 'Profile updated successfully' })
     } catch (err) {
         if (transaction) {
             await transaction.rollback()
         }
-        return res.status(500).send({ message: err.message })
+        return res.status(500).json({ message: err.message })
     }
 }
 
@@ -136,7 +131,7 @@ export const getAllUsers = async (req, res) => {
         }
         return res.status(200).json(data)
     } catch (err) { 
-        return res.status(500).send({ message: err.message })
+        return res.status(500).json({ message: err.message })
     }
 }
 
@@ -147,11 +142,11 @@ export const getUserById = async (req, res) => {
         const id = empId ? empId : userId
         const user = await User.findByPk(id)
         if (!user) {
-            return res.status(404).send({ message: 'User not found' })
+            return res.status(404).json({ message: 'User not found' })
         }
         return res.status(200).json(user)
     } catch (err) { 
-        return res.status(500).send({ message: err.message })
+        return res.status(500).json({ message: err.message })
     }
 }
 
@@ -161,7 +156,7 @@ export const searchUserByName = async (req, res) => {
         const page = parseInt(req.query.page) || 1
         const pageSize = parseInt(req.query.pageSize) || 10
         if (!keyWord) {
-            return res.status(400).send({ message: 'Name query parameter is required' })
+            return res.status(400).json({ message: 'Name query parameter is required' })
         }
         const limit = pageSize
         const offset = (page - 1) * pageSize
@@ -177,7 +172,7 @@ export const searchUserByName = async (req, res) => {
             limit
         })
         if (!users || users.length === 0) {
-            return res.status(404).send({ message: 'No users found'})
+            return res.status(404).json({ message: 'No users found'})
         }
         const data = {
             totalMembers: users.count,
@@ -185,8 +180,8 @@ export const searchUserByName = async (req, res) => {
             currentPage: page,
             data: users.rows
         }
-        return res.status(200).send(data)
+        return res.status(200).json(data)
     } catch (err) {
-        return res.status(500).send({ message: err.message })
+        return res.status(500).json({ message: err.message })
     }
 }

@@ -3,9 +3,6 @@ import db from '../models/index.js'
 import redisClient from '../config/redis.js';
 import dotenv from 'dotenv'
 dotenv.config();
-const User = db.User
-const Role = db.Role
-const Permission = db.Permission
 
 export const authorize = (requiredPermissions = []) => async (req, res, next) => {
     try {
@@ -13,7 +10,6 @@ export const authorize = (requiredPermissions = []) => async (req, res, next) =>
         if (!token) {
             return res.status(401).json({ message: 'Access token is missing' })
         }
-        console.log(token);
         let decoded
         let existingToken
         let userId
@@ -31,6 +27,7 @@ export const authorize = (requiredPermissions = []) => async (req, res, next) =>
         } catch (err) {
             return res.status(403).json({ message: err.message })
         }
+        console.log(decoded);
         req.user = decoded
         if (requiredPermissions.length === 0) {
             return next()
@@ -61,34 +58,3 @@ export const authorize = (requiredPermissions = []) => async (req, res, next) =>
         return res.status(500).send({ message: err.message })
     }
 }
-
-// export const checkPermission = (requiredPermission) => { 
-//     return async (req, res, next) => {
-//         const userId = req.user.id
-//         try {
-//             const userWithPermission = await User.findOne({
-//                 where: {
-//                     id: userId,
-//                 },
-//                 include: [{
-//                     model: Role,
-//                     include: [{
-//                         model: Permission,
-//                     }]
-//                 }]
-//             })
-
-//             if (!userWithPermission || !userWithPermission.Role) {
-//                 return res.status(404).send({ message: 'User or Role not found' })
-//             }
-//             const permissions = userWithPermission.Role.Permissions.map(permission => permission.name)
-//             const checkPermission = permissions.includes(requiredPermission)
-//             if (!checkPermission) {
-//                 return res.status(403).send({ message: 'You have not permission to perform this action' })
-//             }
-//             next()
-//         } catch (err) {
-//             return res.status(500).send({ message: err.message })
-//         }
-//     }
-// }

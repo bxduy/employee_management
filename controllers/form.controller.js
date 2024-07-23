@@ -6,12 +6,12 @@ const { FormTemplate, Role, User, FormData, Notification } = db
 export const getFormTemplate = async (req, res) => { 
     try {
         const templates = await FormTemplate.findAll()
-        if (!templates) {
-            return res.status(404).send({ message: 'No templates found' })
+        if (!templates.length) {
+            return res.status(404).json({ message: 'No templates found' })
         }
-        return res.status(200).send(templates)
+        return res.status(200).json(templates)
     } catch (err) {
-        return res.status(500).send({ message: err.message })
+        return res.status(500).json({ message: err.message })
     }
 }
 
@@ -23,20 +23,15 @@ export const makeForm = async (req, res) => {
         const template = await FormTemplate.findByPk(template_id, { transaction })
         if (!template) {
             await transaction.rollback()
-            return res.status(404).send({ message: 'Template not found' })
+            return res.status(404).json({ message: 'Template not found' })
         }
         // console.log(template.criteria);
         const criteria = template.criteria
         // Convert data structure
-        const newSections = criteria.sections.map(section => {
-            const newFields = section.fields.map(field => {
-                return { [field.label]: "" }
-            })
-            return {
-                title: section.title,
-                fields: newFields
-            };
-        });
+        const newSections = criteria.sections.map(section => ({
+            title: section.title,
+            fields: section.fields.map(field => ({ [field.label]: "" }))
+        }))
 
         // Make data
         const data = { sections: newSections };
@@ -82,10 +77,10 @@ export const makeForm = async (req, res) => {
         }, { transaction })
 
         await transaction.commit()
-        return res.status(201).send({ message: 'Forms created successfully' })
+        return res.status(201).json({ message: 'Forms created successfully' })
     } catch (err) {
         await transaction.rollback()
-        return res.status(500).send({ message: err.message })
+        return res.status(500).json({ message: err.message })
     }
 }
 
@@ -103,16 +98,16 @@ export const getAllFormDataByUserId = async (req, res) => {
             offset: parseInt(offset)
         })
         if (!forms || forms.count === 0) {
-            return res.status(404).send({ message: 'No form found' })
+            return res.status(404).json({ message: 'No form found' })
         }
-        return res.status(200).send({
+        return res.status(200).json({
             totalForms: forms.count,
             totalPages: Math.ceil(forms.count / pageSize),
             currentPage: page,
             data: forms.rows
         })
     } catch (err) {
-        return res.status(500).send({ message: err.message })
+        return res.status(500).json({ message: err.message })
     }
 }
 
@@ -128,10 +123,10 @@ export const submitForm = async(req, res) => {
             }
         })
         if (!form) {
-            return res.status(404).send({ message: 'Form Not Found' })
+            return res.status(404).json({ message: 'Form Not Found' })
         }
         if (form.status === 'approved') { 
-            return res.status(400).send({ message: 'Form approved' })
+            return res.status(400).json({ message: 'Form approved' })
         }
         await FormData.update({
             data: data,
@@ -141,9 +136,9 @@ export const submitForm = async(req, res) => {
                 id: formId
             }
         })
-        return res.status(200).send({ message: 'Submit successful'})
+        return res.status(200).json({ message: 'Submit successful'})
     } catch (err) { 
-        return res.status(500).send({ message: err.message })
+        return res.status(500).json({ message: err.message })
     }
 }
 
@@ -163,7 +158,7 @@ export const getAllFormDataOfEmployee = async (req, res) => {
         })
         if (!user) {
             await transaction.rollback()
-            return res.status(404).send({ message: 'User not found'})
+            return res.status(404).json({ message: 'User not found'})
         }
         const userRole = user.Role.name
         let targetRoleNames = []
@@ -174,7 +169,7 @@ export const getAllFormDataOfEmployee = async (req, res) => {
             targetRoleNames = [roleNames[2]] // Manager
         } else {
             await transaction.rollback()
-            return res.status(403).send({ message: 'Access denied' })
+            return res.status(403).json({ message: 'Access denied' })
         }
 
         const targetRoles = await Role.findAll({
@@ -209,9 +204,9 @@ export const getAllFormDataOfEmployee = async (req, res) => {
 
         await transaction.commit()
         if (!formData || formData.count === 0) {
-            return res.status(404).send({ message: 'Form not found' })
+            return res.status(404).json({ message: 'Form not found' })
         }
-        return res.status(200).send({
+        return res.status(200).json({
             totalForms: formData.count,
             totalPages: Math.ceil(formData.count / pageSize),
             currentPage: page,
@@ -219,7 +214,7 @@ export const getAllFormDataOfEmployee = async (req, res) => {
         })
     } catch (err) {
         await transaction.rollback()
-        return res.status(500).send({ message: err.message })
+        return res.status(500).json({ message: err.message })
     }
 }
 
@@ -229,11 +224,11 @@ export const getFormDataOfFormId = async (req, res) => {
         const formId = req.params.id
         const form = await FormData.findByPk(formId)
         if (!form) {
-            return res.status(404).send({ message: 'Form not found' })
+            return res.status(404).json({ message: 'Form not found' })
         }
         const senderId = form.sender_id
         if (senderId === userId) {
-            return res.status(200).send(form)
+            return res.status(200).json(form)
         }
         const user = await User.findByPk(userId, {
             include: [{
@@ -250,28 +245,28 @@ export const getFormDataOfFormId = async (req, res) => {
         })
         const senderRole = sender.Role.name
         if (userRole === 'director' && senderRole === 'manager') { 
-            return res.status(200).send(form)
+            return res.status(200).json(form)
         }
         if (userRole === 'manager' && (senderRole === 'hr' || senderRole === 'employee')) { 
-            return res.status(200).send(form)
+            return res.status(200).json(form)
         }
-        return res.status(403).send({ message: 'Access denied' })
+        return res.status(403).json({ message: 'Access denied' })
     } catch (err) {
-        return res.status(500).send({ message: err.message })
+        return res.status(500).json({ message: err.message })
     }
 }
 
-export const approveFrom = async(req, res) => { 
+export const approveForm = async(req, res) => { 
     try {
         const userId = req.user.id
         const { formId, status } = req.body
         const validStatuses = ['approved', 'rejected']
         if (!validStatuses.includes(status)) {
-            return res.status(400).send({ message: 'Invalid status' })
+            return res.status(400).json({ message: 'Invalid status' })
         }
         const form = await FormData.findByPk(formId)
         if (!form) { 
-            return res.status(404).send({ message: 'Form not found' })
+            return res.status(404).json({ message: 'Form not found' })
         }
         let updateStatus = status === 'approved' ? status : 'new'
         await FormData.update({
@@ -282,9 +277,9 @@ export const approveFrom = async(req, res) => {
                 id: formId,
             }
         })
-        return res.status(200).send({ message: 'Status updated' })
+        return res.status(200).json({ message: 'Status updated' })
     } catch (err) {
-        return res.status(500).send({ message: err.message })
+        return res.status(500).json({ message: err.message })
     }
 }
 
@@ -313,8 +308,8 @@ export const getFormCompletionReport = async (req, res) => {
             report[statusCount.status] = statusCount.dataValues.count
         })
 
-        return res.status(200).send(report)
+        return res.status(200).json(report)
     } catch (err) {
-        return res.status(500).send({ message: err.message })
+        return res.status(500).json({ message: err.message })
     }
 }
