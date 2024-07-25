@@ -2,11 +2,12 @@ import jwt from 'jsonwebtoken'
 import db from '../models/index.js'
 import dotenv from 'dotenv'
 dotenv.config();
-import { generateAccessToken, generateRefreshToken } from "../utils/config.js"
+import { generateAccessToken, generateRefreshToken, generateResetPasswordToken } from "../utils/config.js"
 import { validation } from "../utils/validation.js"
 import bcrypt from 'bcryptjs'
 import { securepassword } from '../utils/securePassword.js'
 import redisClient from '../config/redis.js'
+import emailQueue from '../utils/email.js';
 
 const User = db.User
 
@@ -101,9 +102,6 @@ export const changePassword = async(req, res) => {
     try {
         const userId = req.user.id
         const { oldPassword, newPassword, confirmPassword } = req.body
-        if (newPassword !== confirmPassword) {
-            return res.status(400).json({ message: 'New password and confirm password do not match' })
-        }
         // Fetch the user by ID
         const user = await User.findOne({
             where: { id: userId },
@@ -119,7 +117,7 @@ export const changePassword = async(req, res) => {
             return res.status(400).json({ message: 'Old password is incorrect' })
         }
         // Validate newPassword
-        const validateErr = validation('changePassword', { newPassword });
+        const validateErr = validation('changePassword', { newPassword, confirmPassword });
         if (validateErr) {
             return res.status(400).json({ message: validateErr });
         }
@@ -154,6 +152,59 @@ export const logout = async (req, res) => {
         await redisClient.del(key)
         return res.status(200).json({ message: 'Logout successfully' })
     } catch (err) { 
+        return res.status(500).json({ message: err.message })
+    }
+}
+
+
+export const forgotPassword = async (req, res) => { 
+    try {
+        const { email } = req.body
+        const user = await User.findOne({ where: { email } })
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' })
+        }
+        const token = await generateResetPasswordToken(email)
+        const resetLink = `${process.env.URL}auth/reset-password/${token}`
+        await emailQueue.add({
+            bcc: email,
+            subject: 'Password Reset',
+            text: `Click the following link to reset your password: ${resetLink}`
+        })
+        return res.status(200).json({ message: 'Password reset email sent' })
+    } catch (err) {
+        return res.status(500).json({ message: err.message })
+    }
+}
+
+export const resetPassword = async (req, res) => { 
+    try {
+        const { token } = req.params
+        const { newPassword, confirmPassword } = req.body
+        const decoded = jwt.verify(token, process.env.RESET_PASS_SECRET)
+        const email = decoded.email
+        const existingToken = await redisClient.get(email)
+        if (!existingToken || existingToken !== token) {
+            return res.status(403).json({ message: 'Token mismatch or expired' }) 
+        }
+        const validateErr = validation('changePassword', { newPassword, confirmPassword });
+        if (validateErr) {
+            return res.status(400).json({ message: validateErr });
+        }
+        const user = await User.findOne({
+            where: {
+                email
+            }
+        })
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' })
+        }
+        const hashedPassword = await securepassword(newPassword)
+        user.password_hash = hashedPassword
+        await user.save()
+        await redisClient.del(email)
+        return res.status(200).json({ message: 'Password reset successfully' })
+    } catch (err) {
         return res.status(500).json({ message: err.message })
     }
 }

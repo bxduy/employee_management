@@ -1,7 +1,7 @@
 import db from "../models/index.js";
 import cloudinary from "../config/cloudinary.js";
 import { securepassword } from "../utils/securePassword.js";
-import { generateEmployeeCode } from "../utils/config.js";
+import { generateEmployeeCode, generateResetPasswordToken } from "../utils/config.js";
 import { validation } from "../utils/validation.js";
 import { Op } from "sequelize";
 import dotenv from 'dotenv';
