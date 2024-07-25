@@ -10,20 +10,24 @@ dotenv.config();
 
 const User = db.User
 
+// Register a new user
 export const register = async (req, res) => {
     const transaction = await db.sequelize.transaction()
     let file
     try {
         const { firstname, lastname, password, email, phone, identification_number, address, insurance_number, role_id } = req.body
-        const employee_code = await generateEmployeeCode()
-        file = req.file
+        // Validate input
         const action = 'register'
         const validateErr = validation(action, { firstname, lastname, password, email });
     
         if (validateErr) {
             return res.status(400).json({ message: validateErr })
         }
-        const password_hash = await securepassword(password)
+        // Generate employee code and hash password
+        const [employee_code, password_hash] = await Promise.all([
+            generateEmployeeCode(),
+            securepassword(password)
+        ])
         // Create new user
         const newUser = await User.create({
             employee_code,
@@ -37,6 +41,8 @@ export const register = async (req, res) => {
             insurance_number,
             role_id
         }, { transaction })
+        // Upload avatar if file is provided
+        file = req.file
         if (file) {
             const imgPath = await cloudinary.uploader.upload(file.path, {
                 folder: 'images',
@@ -54,24 +60,25 @@ export const register = async (req, res) => {
     }
 }
 
+// Edit user profile
 export const editProfile = async (req, res) => {
     let file
     let transaction
     try {
+        // Determine user ID from request params or authenticated user
         const userId = req.user.id
         const empId = req.params.id
         const id = empId ? empId : userId
-        const user_code = req.user.employee_code
-        const { employee_code, firstname, lastname, email, phone, identification_number, address, insurance_number } = req.body
-        let code
-        code = employee_code ? employee_code : user_code
+        const { employee_code, firstname, lastname, email, phone, identification_number, address, insurance_number, role_id } = req.body
         file = req.file
+        // Validate input
         const action = 'editProfile'
         const validateErr = validation(action, { firstname, lastname, email })
         if (validateErr) {
             return res.status(400).json({ message: validateErr })
         }
         transaction = await db.sequelize.transaction()
+        // Prepare data for update
         const userUpdateData = {
             firstname,
             lastname,
@@ -80,20 +87,18 @@ export const editProfile = async (req, res) => {
             identification_number,
             address,
             insurance_number,
-        };
-
-        if (role_id) {
-            userUpdateData.role_id = role_id
+            ...(role_id && { role_id })
         }
 
+        // Upload avatar if file is provided
         if (file) {
             const newAvatar = await cloudinary.uploader.upload(file.path, {
                 folder: 'images',
-                public_id: `${code}`,
+                public_id: `${employee_code}`,
             })
             userUpdateData.avatar = newAvatar.secure_url
         }
-
+        // Update user
         await User.update(userUpdateData, {
             where: {
                 id,
@@ -110,19 +115,21 @@ export const editProfile = async (req, res) => {
     }
 }
 
+// Get all users with pagination
 export const getAllUsers = async (req, res) => {
     try {
+        // Parse pagination parameters
         const page = parseInt(req.query.page) || 1
         const pageSize = parseInt(req.query.pageSize) || 10
         const offset = (page - 1) * pageSize
-
+        // Retrieve users with pagination
         const users = await User.findAndCountAll({
             attributes: ['employee_code', 'firstname', 'lastname', 'email', 'phone'
                 , 'address', 'role_id', 'identification_number', 'insurance_number'],
             limit: pageSize,
             offset: offset
         })
-
+        // Structure response data
         const data = {
             totalMembers: users.count,
             totalPages: Math.ceil(users.count / pageSize),
@@ -135,6 +142,7 @@ export const getAllUsers = async (req, res) => {
     }
 }
 
+// Get user by id
 export const getUserById = async (req, res) => {
     try {
         const userId = req.user.id
@@ -150,6 +158,7 @@ export const getUserById = async (req, res) => {
     }
 }
 
+// Search users by name
 export const searchUserByName = async (req, res) => {
     try {
         const keyWord = req.query.name
@@ -160,6 +169,7 @@ export const searchUserByName = async (req, res) => {
         }
         const limit = pageSize
         const offset = (page - 1) * pageSize
+        // Search users by name
         const users = await User.findAndCountAll({
             where: {
                 [Op.or]: [

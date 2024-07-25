@@ -3,6 +3,7 @@ import emailQueue from '../utils/email.js'
 
 const { FormTemplate, Role, User, FormData, Notification } = db
 
+// Fetch all form templates
 export const getFormTemplate = async (req, res) => { 
     try {
         const templates = await FormTemplate.findAll()
@@ -15,27 +16,26 @@ export const getFormTemplate = async (req, res) => {
     }
 }
 
+// Create a new form based on a template
 export const makeForm = async (req, res) => {
     const transaction = await db.sequelize.transaction()
     try {
         const creator_id = req.user.id
         const { template_id } = req.body
+        // Fetch the template by ID
         const template = await FormTemplate.findByPk(template_id, { transaction })
         if (!template) {
             await transaction.rollback()
             return res.status(404).json({ message: 'Template not found' })
         }
-        // console.log(template.criteria);
+        // Convert data structure based on template criteria
         const criteria = template.criteria
-        // Convert data structure
         const newSections = criteria.sections.map(section => ({
             title: section.title,
             fields: section.fields.map(field => ({ [field.label]: "" }))
         }))
-
-        // Make data
         const data = { sections: newSections };
-
+        // Get roles and users associated with the form
         const roleNames = ['manager', 'hr', 'employee']
         const roles = await Role.findAll({
             where: {
@@ -52,7 +52,7 @@ export const makeForm = async (req, res) => {
             attributes: ['id', 'email'],
             transaction
         });
-
+        // Prepare form data entries for bulk creation
         const userIds = users.map(user => user.id)
         const emailAddresses = users.map(user => user.email).join(',')
         const type = template.name
@@ -63,6 +63,7 @@ export const makeForm = async (req, res) => {
             approver_id: null
         }))
         await FormData.bulkCreate(formDataEntries, { transaction })
+        // Notify users via email
         const formName = type.toUpperCase() + ' FORM'
         const subject = `${formName} has been created`
         const text = `${formName} has been created, please fill out the form`
@@ -71,6 +72,7 @@ export const makeForm = async (req, res) => {
             subject,
             text,
         })
+        // Create a notification record
         await Notification.create({
             message: subject,
             maker_id: creator_id
@@ -84,11 +86,13 @@ export const makeForm = async (req, res) => {
     }
 }
 
+// Get all form data submitted by a user
 export const getAllFormDataByUserId = async (req, res) => {
     try {
         const id = req.user.id
         const { page = 1, pageSize = 10 } = req.query
         const offset = (page - 1) * pageSize
+        // Fetch form data with pagination
         const forms = await FormData.findAndCountAll({
             where: {
                 sender_id: id,
@@ -111,11 +115,13 @@ export const getAllFormDataByUserId = async (req, res) => {
     }
 }
 
+// Submit a form
 export const submitForm = async(req, res) => { 
     try {
         const userId = req.user.id
         const formId = req.params.id
         const { data } = req.body
+        // Fetch the form by ID and user ID
         const form = await FormData.findOne({
             where: {
                 id: formId,
@@ -128,6 +134,7 @@ export const submitForm = async(req, res) => {
         if (form.status === 'approved') { 
             return res.status(400).json({ message: 'Form approved' })
         }
+        // Update form data and status
         await FormData.update({
             data: data,
             status: 'submitted'
@@ -142,6 +149,7 @@ export const submitForm = async(req, res) => {
     }
 }
 
+// Get all form data submitted by employees that a manager or director oversees
 export const getAllFormDataOfEmployee = async (req, res) => { 
     const transaction = await db.sequelize.transaction()
     try {
@@ -149,6 +157,7 @@ export const getAllFormDataOfEmployee = async (req, res) => {
         const { page = 1, pageSize = 10 } = req.query
         const offset = (page - 1) * pageSize
         const roleNames = ['employee', 'hr', 'manager', 'director']
+        // Fetch the user and their role
         const user = await User.findByPk(userId, {
             include: [{
                 model: Role,
@@ -160,6 +169,7 @@ export const getAllFormDataOfEmployee = async (req, res) => {
             await transaction.rollback()
             return res.status(404).json({ message: 'User not found'})
         }
+        // Determine target roles based on user's role
         const userRole = user.Role.name
         let targetRoleNames = []
 
@@ -171,7 +181,7 @@ export const getAllFormDataOfEmployee = async (req, res) => {
             await transaction.rollback()
             return res.status(403).json({ message: 'Access denied' })
         }
-
+        // Fetch target roles and their IDs
         const targetRoles = await Role.findAll({
             where: {
                 name: targetRoleNames
@@ -180,7 +190,7 @@ export const getAllFormDataOfEmployee = async (req, res) => {
             transaction
         })
         const targetRoleIds = targetRoles.map(role => role.id)
-
+        // Fetch form data of target roles with pagination
         const formData = await FormData.findAndCountAll({
             where: {
                 status: 'submitted',
@@ -218,18 +228,22 @@ export const getAllFormDataOfEmployee = async (req, res) => {
     }
 }
 
+// Get specific form data by form ID
 export const getFormDataOfFormId = async (req, res) => { 
     try {
         const userId = req.user.id
         const formId = req.params.id
+        // Fetch the form by ID
         const form = await FormData.findByPk(formId)
         if (!form) {
             return res.status(404).json({ message: 'Form not found' })
         }
+        // Check if the user is the sender
         const senderId = form.sender_id
         if (senderId === userId) {
             return res.status(200).json(form)
         }
+        // Fetch the user and their role
         const user = await User.findByPk(userId, {
             include: [{
                 model: Role,
@@ -237,6 +251,7 @@ export const getFormDataOfFormId = async (req, res) => {
             }]
         })
         const userRole = user.Role.name
+        // Fetch the sender and their role
         const sender = await User.findByPk(senderId, {
             include: [{
                 model: Role,
@@ -244,6 +259,7 @@ export const getFormDataOfFormId = async (req, res) => {
             }]
         })
         const senderRole = sender.Role.name
+        // Check if the user has permission to view the form
         if (userRole === 'director' && senderRole === 'manager') { 
             return res.status(200).json(form)
         }
@@ -256,19 +272,23 @@ export const getFormDataOfFormId = async (req, res) => {
     }
 }
 
+// Approve or reject a form
 export const approveForm = async(req, res) => { 
     try {
         const userId = req.user.id
         const { formId, status } = req.body
+        // Validate the status
         const validStatuses = ['approved', 'rejected']
         if (!validStatuses.includes(status)) {
             return res.status(400).json({ message: 'Invalid status' })
         }
+        // Fetch the form by ID
         const form = await FormData.findByPk(formId)
         if (!form) { 
             return res.status(404).json({ message: 'Form not found' })
         }
         let updateStatus = status === 'approved' ? status : 'new'
+        // Update the form status and approver ID
         await FormData.update({
             status: updateStatus,
             approver_id: userId
@@ -283,9 +303,11 @@ export const approveForm = async(req, res) => {
     }
 }
 
+// Get report of form completion status
 export const getFormCompletionReport = async (req, res) => {
     try {
         const { type } = req.query
+        // Fetch counts of form statuses by type
         const statusCounts = await FormData.findAll({
             attributes: [
                 'status',
@@ -297,13 +319,13 @@ export const getFormCompletionReport = async (req, res) => {
             },
             group: ['status']
         })
-
+        // Initialize report with zero counts
         const report = {
             new: 0,
             submitted: 0,
             approved: 0
         }
-        
+        // Populate report with actual counts
         statusCounts.forEach(statusCount => {
             report[statusCount.status] = statusCount.dataValues.count
         })
